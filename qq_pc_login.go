@@ -118,13 +118,14 @@ func (h *QQLoginHandler) qqCallbackHandler(c *gin.Context) {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{"error": "获取用户信息失败"})
 		return
 	}
-
+	fmt.Println("userInfo:", userInfo)
 	// 设置Session
 	session := sessions.Default(c)
 	userSession := UserSession{
-		IsLogin:  true,
-		OpenID:   openid,
-		UserInfo: userInfo,
+		IsLogin:    true,
+		OpenID:     openid,
+		UserInfo:   userInfo,
+		LastActive: time.Now(),
 	}
 	session.Clear()
 	session.Set("user", userSession)

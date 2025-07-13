@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/gob"
 	"net/http"
+	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -11,10 +12,15 @@ import (
 
 // 用户会话信息结构
 type UserSession struct {
-	IsLogin  bool                   `json:"is_login"`
-	OpenID   string                 `json:"openid"`
-	UserInfo map[string]interface{} `json:"user_info"`
+	IsLogin    bool                   `json:"is_login"`
+	OpenID     string                 `json:"openid"`
+	UserInfo   map[string]interface{} `json:"user_info"`
+	LastActive time.Time              `json:"last_active"`
 }
+
+var (
+	MaxSessionDuration = 10 * time.Minute
+)
 
 func main() {
 	r := gin.Default()
@@ -28,7 +34,7 @@ func main() {
 	store := cookie.NewStore([]byte("secret-key-123456")) // 生产环境使用更复杂的密钥
 	store.Options(sessions.Options{
 		Path:     "/",
-		MaxAge:   60, //86400 * 7, // 7天
+		MaxAge:   int(MaxSessionDuration.Seconds()), //86400 * 7, // 7天
 		HttpOnly: true,
 		Secure:   false, // 本地开发设为false，生产环境设为true
 	})
@@ -38,17 +44,12 @@ func main() {
 	// 路由定义
 	r.GET("/", loginHandler)
 	r.GET("/login", loginHandler)
-	r.GET("/dashboard", authRequired(), dashboardHandler)
+	r.GET("/dashboard", SessionAuthMiddleware(), dashboardHandler)
 	r.GET("/logout", logoutHandler)
 
 	NewQQLoginHandler(r)
 	// 启动服务器
 	r.Run(":9090")
-}
-
-// 首页
-func homeHandler(c *gin.Context) {
-	c.HTML(http.StatusOK, "index.html", nil)
 }
 
 // 登录页
@@ -62,7 +63,10 @@ func dashboardHandler(c *gin.Context) {
 	userSession := session.Get("user").(UserSession)
 
 	c.HTML(http.StatusOK, "dashboard.html", gin.H{
-		"user": userSession.UserInfo,
+		"user":       userSession.UserInfo,
+		"lastActive": userSession.LastActive,
+		"expired_in": userSession.LastActive.Add(MaxSessionDuration),
+		"now_time":   time.Now(),
 	})
 }
 
@@ -75,27 +79,28 @@ func logoutHandler(c *gin.Context) {
 }
 
 // 认证中间件
-func authRequired() gin.HandlerFunc {
+func CheckSessionValid(c *gin.Context) bool {
+	session := sessions.Default(c)
+	user := session.Get("user")
+	if user == nil {
+		return false
+	}
+	userSession, ok := user.(UserSession)
+	if !ok || !userSession.IsLogin {
+		return false
+	}
+	if time.Since(userSession.LastActive) > MaxSessionDuration {
+		return false
+	}
+	return true
+}
+func SessionAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		user := session.Get("user")
-
-		if user == nil {
-			// 未登录，重定向到登录页
-			c.Redirect(http.StatusFound, "/toLogin")
+		if !CheckSessionValid(c) {
+			c.Redirect(http.StatusFound, "/")
 			c.Abort()
 			return
 		}
-
-		// 检查会话是否有效
-		userSession, ok := user.(UserSession)
-		if !ok || !userSession.IsLogin {
-			c.Redirect(http.StatusFound, "/toLogin")
-			c.Abort()
-			return
-		}
-
-		// 用户已登录，继续处理请求
 		c.Next()
 	}
 }
