@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>用户中心</title>
+</head>
+<body>
+    <h1>欢迎, {{ .user.nickname }}</h1>
+    <img src="{{ .user.figureurl_qq_1 }}" alt="QQ头像" width="100">
+    <p>性别: {{ if eq .user.gender "男" }}男{{ else }}女{{ end }}</p>
+    <p>城市: {{ .user.city }}</p>
+    <a href="/logout">退出登录</a>
+</body>
+</html>
