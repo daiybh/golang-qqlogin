@@ -53,13 +53,15 @@ func NewQQLoginHandler(r *gin.Engine) *QQLoginHandler {
 
 // 发起QQ登录
 func (h *QQLoginHandler) qqAuthHandler(c *gin.Context) {
+
+	redirect_url := c.Query("redirect_url")
 	params := url.Values{}
 	params.Add("response_type", "code")
 	params.Add("client_id", AppId)
 
 	state := fmt.Sprintf("%d", time.Now().Unix()) // 简单的state生成方式
 	params.Add("state", state)
-	str := fmt.Sprintf("%s&redirect_uri=%s", params.Encode(), redirectURI)
+	str := fmt.Sprintf("%s&redirect_uri=%s?redirect_path=%s", params.Encode(), redirectURI, redirect_url)
 	loginURL := fmt.Sprintf("%s?%s", "https://graph.qq.com/oauth2.0/authorize", str)
 
 	//http.Redirect(w, r, loginURL, http.StatusFound)
@@ -82,7 +84,10 @@ func (h *QQLoginHandler) qqCallbackHandler(c *gin.Context) {
 		c.HTML(http.StatusBadRequest, "error.html", gin.H{"error": "缺少授权码"})
 		return
 	}
-
+	redirect_path := c.Query("redirect_path")
+	if redirect_path == "" {
+		redirect_path = "/"
+	}
 	params := url.Values{}
 	params.Add("grant_type", "authorization_code")
 	params.Add("client_id", AppId)
@@ -118,7 +123,6 @@ func (h *QQLoginHandler) qqCallbackHandler(c *gin.Context) {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{"error": "获取用户信息失败"})
 		return
 	}
-	fmt.Println("userInfo:", userInfo)
 	// 设置Session
 	session := sessions.Default(c)
 	userSession := UserSession{
@@ -138,7 +142,7 @@ func (h *QQLoginHandler) qqCallbackHandler(c *gin.Context) {
 	}
 
 	// 登录成功后重定向到仪表盘
-	c.Redirect(http.StatusFound, "/dashboard")
+	c.Redirect(http.StatusFound, redirect_path)
 }
 
 // 3.获取QQ openid

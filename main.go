@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/gob"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -45,16 +46,45 @@ func main() {
 	r.GET("/", loginHandler)
 	r.GET("/login", loginHandler)
 	r.GET("/dashboard", SessionAuthMiddleware(), dashboardHandler)
+	r.GET("/d2", SessionAuthMiddleware(), dashboardHandler)
 	r.GET("/logout", logoutHandler)
+
+	r.GET("/getdata", getdataHandler)
 
 	NewQQLoginHandler(r)
 	// 启动服务器
 	r.Run(":9090")
 }
 
+func getdataHandler(c *gin.Context) {
+	// 	[
+	//     {"id":1, "name":"bob", "age":"23"},
+	//     {"id":2, "name":"jim", "age":"45"},
+	//     {"id":3, "name":"steve", "age":"32"}
+	// ]
+	//c.Writer.Write([]byte(`[{"id":1, "name":"bob", "age":"23"},{"id":2, "name":"jim", "age":"45"},{"id":3, "name":"steve", "age":"32"}]`))
+	type User struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
+	users := []User{
+		{ID: 1, Name: "bob", Age: 23},
+		{ID: 2, Name: "jim", Age: 45},
+		{ID: 3, Name: "steve", Age: 32},
+	}
+
+	c.JSON(http.StatusOK, users)
+	//c.JSON(http.StatusOK, `[{"id":1, "name":"bob", "age":"23"},{"id":2, "name":"jim", "age":"45"},{"id":3, "name":"steve", "age":"32"}]`)
+	// c.JSON(http.StatusOK, gin.H{
+	// 	"id": 1, "name": "bob", "age": "23",
+	// })
+}
+
 // 登录页
 func loginHandler(c *gin.Context) {
-	c.HTML(http.StatusOK, "login.html", nil)
+	c.HTML(http.StatusOK, "tabulator_test.html", nil)
 }
 
 // 仪表盘页面
@@ -97,7 +127,14 @@ func CheckSessionValid(c *gin.Context) bool {
 func SessionAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !CheckSessionValid(c) {
-			c.Redirect(http.StatusFound, "/")
+			//get  c.path
+			scheme := "http"
+			if c.Request.TLS != nil {
+				scheme = "https"
+			}
+			redirectURL := fmt.Sprintf("%s://%s%s", scheme, c.Request.Host, c.Request.RequestURI)
+			fmt.Println("SessionAuthMiddleware redirectURL:", redirectURL)
+			c.Redirect(http.StatusFound, "/toLogin?redirect_url="+redirectURL)
 			c.Abort()
 			return
 		}
